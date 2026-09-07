@@ -1,0 +1,14 @@
+{
+  "BlockStart": "23:00",
+  "BlockEnd": "07:00",
+  "CheckIntervalSeconds": 2,
+  "TargetUserSid": "INSTALLER_WILL_SET_THIS",
+  "SteamPath": "INSTALLER_WILL_SET_THIS",
+  "SteamProcessNames": [
+    "steam.exe",
+    "steamwebhelper.exe",
+    "gameoverlayui.exe"
+  ],
+  "GameDirectories": [],
+  "ExtraExecutables": []
+}
