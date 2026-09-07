@@ -14,17 +14,9 @@ After setup, you can also find **Steam Block** in the Windows Start menu. You ca
 
 The app starts with protection off, so it cannot unexpectedly close Steam during setup. Its default hours are 23:00 until 07:00.
 
-## What the colors mean
-
-- A large green **PROTECTION IS ON** card means the blocker is running.
-- A large red **PROTECTION IS OFF** card means Steam is allowed at all times.
-- When protection is on, the card also says whether Steam is blocked at the current moment.
-
-The **Save times** button changes the schedule without changing whether protection is on. The larger button turns protection on or off and also saves the selected times.
-
 ## How it works
 
-The control panel is a native C# Windows app, so opening it does not create a PowerShell console window. Windows will show an administrator prompt because changing a protected background task requires administrator access.
+Windows will show an administrator prompt because changing a protected background task requires administrator access.
 
 The blocker itself is a small PowerShell monitor started invisibly by Windows Task Scheduler. It checks every two seconds only during the blocked period. It starts automatically with Windows and does not show a window.
 
@@ -65,4 +57,4 @@ Windows 11 includes the .NET Framework compiler used by the build script:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\app\Build.ps1
 ```
 
-This recreates `Steam Block.exe` as an optimized Windows executable with no console window.
+This recreates `Steam Block.exe`.
