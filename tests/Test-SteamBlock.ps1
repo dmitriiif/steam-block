@@ -1,6 +1,6 @@
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Split-Path -Parent $PSScriptRoot) 'SteamBlock.Common.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'app\SteamBlock.Common.ps1')
 
 $failures = 0
 function Assert-Equal {

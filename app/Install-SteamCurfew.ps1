@@ -18,7 +18,7 @@ function Test-IsAdministrator {
 }
 
 if (-not (Test-IsAdministrator)) {
-    throw 'Run this installer as administrator, or open SteamBlock-GUI.ps1 and approve its Windows prompt.'
+    throw 'Run this installer as administrator, or open Steam Block.exe and approve its Windows prompt.'
 }
 
 $taskName = 'SteamCurfew'
@@ -54,7 +54,6 @@ New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
 $runtimeFiles = @(
     'SteamBlock.Common.ps1',
     'SteamCurfew.ps1',
-    'SteamBlock-GUI.ps1',
     'Install-SteamCurfew.ps1',
     'Uninstall-SteamCurfew.ps1'
 )
@@ -65,6 +64,18 @@ foreach ($file in $runtimeFiles) {
         Copy-Item -LiteralPath $source -Destination $destination -Force
     }
 }
+
+$guiSource = @(
+    (Join-Path $PSScriptRoot 'Steam Block.exe'),
+    (Join-Path (Split-Path -Parent $PSScriptRoot) 'Steam Block.exe')
+) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+if (-not $guiSource) { throw 'Steam Block.exe was not found beside the app folder.' }
+$guiDestination = Join-Path $InstallPath 'Steam Block.exe'
+if ((ConvertTo-NormalizedPath $guiSource) -ne (ConvertTo-NormalizedPath $guiDestination)) {
+    Copy-Item -LiteralPath $guiSource -Destination $guiDestination -Force
+}
+$oldGuiPath = Join-Path $InstallPath 'SteamBlock-GUI.ps1'
+if (Test-Path -LiteralPath $oldGuiPath) { Remove-Item -LiteralPath $oldGuiPath -Force }
 Save-SteamBlockConfig -Config $config -Path $configPath
 
 # Keep SYSTEM and administrators in control of executable files. Other users may read and run them.
@@ -99,10 +110,10 @@ $programsDirectory = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Pr
 $shortcutPath = Join-Path $programsDirectory 'Steam Block.lnk'
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $powerShell
-$shortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f (Join-Path $InstallPath 'SteamBlock-GUI.ps1')
+$shortcut.TargetPath = $guiDestination
+$shortcut.Arguments = ''
 $shortcut.WorkingDirectory = $InstallPath
-$shortcut.IconLocation = "$env:SystemRoot\System32\shell32.dll,47"
+$shortcut.IconLocation = $guiDestination
 $shortcut.Save()
 
 if ($NoStart) {
@@ -111,5 +122,5 @@ if ($NoStart) {
     Start-ScheduledTask -TaskName $taskName
 }
 
-Write-Output ("Steam Block installed. Found {0} Steam game director{1}." -f @($config.GameDirectories).Count, $(if (@($config.GameDirectories).Count -eq 1) { 'y' } else { 'ies' }))
+Write-Output ("Steam Block installed. Monitoring {0} Steam game librar{1}." -f @($config.GameDirectories).Count, $(if (@($config.GameDirectories).Count -eq 1) { 'y' } else { 'ies' }))
 Write-Output 'Open "Steam Block" from the Start menu to change its schedule or enable/disable it.'

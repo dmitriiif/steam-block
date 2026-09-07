@@ -175,16 +175,8 @@ function Get-SteamGameDirectories {
 
     $results = @()
     foreach ($library in $LibraryPaths) {
-        $steamApps = Join-Path $library 'steamapps'
-        if (-not (Test-Path -LiteralPath $steamApps)) { continue }
-        foreach ($manifest in (Get-ChildItem -LiteralPath $steamApps -Filter 'appmanifest_*.acf' -File -ErrorAction SilentlyContinue)) {
-            $content = Get-Content -LiteralPath $manifest.FullName -Raw -ErrorAction SilentlyContinue
-            if ($content -match '"installdir"\s*"((?:\\.|[^"])*)"') {
-                $installName = ConvertFrom-VdfEscapedString $matches[1]
-                $gamePath = ConvertTo-NormalizedPath (Join-Path (Join-Path $steamApps 'common') $installName)
-                if ($gamePath -and (Test-Path -LiteralPath $gamePath -PathType Container)) { $results += $gamePath }
-            }
-        }
+        $commonPath = ConvertTo-NormalizedPath (Join-Path $library 'steamapps\common')
+        if ($commonPath -and (Test-Path -LiteralPath $commonPath -PathType Container)) { $results += $commonPath }
     }
     return @($results | Sort-Object -Unique)
 }
