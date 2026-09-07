@@ -1,53 +1,49 @@
-# Steam Block
+# Windows App Blocker
 
-Steam Block is a small Windows 11 app that closes Steam and Steam games during hours you choose.
+Windows App Blocker is a small Windows 11 utility that closes apps you choose during a daily time window.
 
 ## Start here
 
 1. Download and extract the complete project folder.
-2. Double-click **Steam Block.exe** in the main folder.
+2. Double-click **Windows App Blocker.exe** in the main folder.
 3. Approve the Windows administrator prompt.
-4. Select **Install Steam Block**.
-5. Choose the hours you want and select **Turn protection ON**.
+4. Choose whether to add Start menu and desktop shortcuts, then select **Install Windows App Blocker**.
+5. Use **Add .exe...** to choose one or more applications.
+6. Choose the blocked hours, save your changes, and turn protection on.
 
-After setup, you can also find **Steam Block** in the Windows Start menu. You can close the control panel after making a change; protection continues quietly in the background.
+You can then open **Windows App Blocker** from the Windows Start menu. Closing the control panel does not stop protection.
 
-The app starts with protection off, so it cannot unexpectedly close Steam during setup. Its default hours are 23:00 until 07:00.
+Protection starts off, so setup cannot unexpectedly close an app. The default block window is 23:00–07:00. Overnight windows work as expected: a 23:00–07:00 schedule blocks apps from 23:00 through 06:59, every day.
 
 ## How it works
 
-Windows will show an administrator prompt because changing a protected background task requires administrator access.
+The app installs a small, hidden PowerShell monitor through Windows Task Scheduler. During the configured window, it checks running processes every two seconds and force-closes any whose full executable path exactly matches an entry in your list.
 
-The blocker itself is a small PowerShell monitor started invisibly by Windows Task Scheduler. It checks every two seconds only during the blocked period. It starts automatically with Windows and does not show a window.
+Matching the complete path matters: selecting `C:\Apps\Example.exe` will not block another `Example.exe` elsewhere. Only processes owned by the Windows account that installed the blocker are affected.
 
-The installer detects Steam and all configured Steam library folders. It watches each library's `steamapps\common` folder, so games installed later in an existing library are covered automatically. If you add an entirely new Steam library on another drive, run the installer from `app\Install-SteamCurfew.ps1` with `-RefreshGames` or reinstall the app.
+Windows requests administrator access because the app installs and controls a protected background task. Installed files live under `C:\ProgramData\WindowsAppBlocker`, and the scheduled task is named `WindowsAppBlocker`.
 
-Steam Block only closes matching processes owned by the Windows user who installed it. It leaves the Steam system service alone. Games are force-closed, so save progress before the blocking time.
+> Apps are force-closed. Save your work before a blocking window begins. Windows App Blocker is a self-control aid; a Windows administrator can disable or uninstall it.
 
 ## Files
 
-- `Steam Block.exe` is the only file you need to open.
-- `app` contains the application source and background scripts.
-- `README.md` is this guide.
-- `tests` contains safe automated checks.
-
-Installed runtime files are protected under `C:\ProgramData\SteamCurfew`. The scheduled task is named `SteamCurfew`.
+- `Windows App Blocker.exe` is the launcher and control panel.
+- `app` contains the source, installer, uninstaller, and background monitor.
+- `tests` contains safe automated checks that do not close programs or change Task Scheduler.
 
 ## Testing
 
-The automated tests do not close programs or alter Task Scheduler:
+Run the safe test suite:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-SteamBlock.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-AppBlocker.ps1
 ```
 
-For a practical test, save any open game, choose a short period containing the current time, and turn protection on. Steam should close and should be closed again within about two seconds if reopened.
+For a practical test, choose a harmless app such as Notepad, set a short window containing the current time, and turn protection on. The selected app should close and be closed again within about two seconds if reopened.
 
 ## Uninstall
 
-Open Steam Block and select **Uninstall Steam Block**. The app shows a warning before it turns protection off and completely removes the scheduled task, Start menu entry, settings, logs, and installed application files.
-
-Steam Block is a self-control aid. A Windows administrator can disable or uninstall it.
+Open Windows App Blocker and select **Uninstall**. After confirmation, it turns protection off and removes the scheduled task, Start menu shortcut, settings, logs, and installed application files.
 
 ## Building the launcher
 
@@ -57,8 +53,8 @@ Windows 11 includes the .NET Framework compiler used by the build script:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\app\Build.ps1
 ```
 
-This recreates `Steam Block.exe`.
+This recreates `Windows App Blocker.exe`.
 
 ## License
 
-Steam Block is available under the [MIT License](LICENSE).
+Windows App Blocker is available under the [MIT License](LICENSE).

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$InstallPath = 'C:\ProgramData\SteamCurfew',
+    [string]$InstallPath = 'C:\ProgramData\WindowsAppBlocker',
     [switch]$RemoveFiles,
     [int]$WaitForProcessId = 0
 )
@@ -14,17 +14,19 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     throw 'Run this uninstaller as administrator.'
 }
 
-$task = Get-ScheduledTask -TaskName 'SteamCurfew' -ErrorAction SilentlyContinue
+$task = Get-ScheduledTask -TaskName 'WindowsAppBlocker' -ErrorAction SilentlyContinue
 if ($task) {
-    Stop-ScheduledTask -TaskName 'SteamCurfew' -ErrorAction SilentlyContinue
-    Unregister-ScheduledTask -TaskName 'SteamCurfew' -Confirm:$false
+    Stop-ScheduledTask -TaskName 'WindowsAppBlocker' -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName 'WindowsAppBlocker' -Confirm:$false
 }
 
-$shortcutPath = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Steam Block.lnk'
+$shortcutPath = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Windows App Blocker.lnk'
 if (Test-Path -LiteralPath $shortcutPath) { Remove-Item -LiteralPath $shortcutPath -Force }
+$desktopShortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Windows App Blocker.lnk'
+if (Test-Path -LiteralPath $desktopShortcutPath) { Remove-Item -LiteralPath $desktopShortcutPath -Force }
 
 if ($RemoveFiles) {
-    $expectedPath = [IO.Path]::GetFullPath('C:\ProgramData\SteamCurfew').TrimEnd('\')
+    $expectedPath = [IO.Path]::GetFullPath('C:\ProgramData\WindowsAppBlocker').TrimEnd('\')
     $requestedPath = [IO.Path]::GetFullPath($InstallPath).TrimEnd('\')
     if (-not $requestedPath.Equals($expectedPath, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to remove unexpected directory: $requestedPath"
@@ -51,4 +53,4 @@ for (`$attempt = 0; `$attempt -lt 10; `$attempt++) {
     }
 }
 
-Write-Output 'Steam Block has been disabled and removed from Task Scheduler.'
+Write-Output 'Windows App Blocker has been disabled and removed from Task Scheduler.'

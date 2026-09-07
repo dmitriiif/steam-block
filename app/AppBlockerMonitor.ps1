@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = 'C:\ProgramData\SteamCurfew\config.json',
+    [string]$ConfigPath = 'C:\ProgramData\WindowsAppBlocker\config.json',
     [switch]$DryRun,
     [switch]$Once,
     [datetime]$AtTime = [datetime]::MinValue
@@ -8,12 +8,12 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'SteamBlock.Common.ps1')
+. (Join-Path $PSScriptRoot 'AppBlocker.Common.ps1')
 
-$script:LogPath = Join-Path (Split-Path -Parent $ConfigPath) 'SteamCurfew.log'
+$script:LogPath = Join-Path (Split-Path -Parent $ConfigPath) 'WindowsAppBlocker.log'
 $script:RecentMessages = @{}
 
-function Write-CurfewLog {
+function Write-AppBlockerLog {
     param([string]$Message, [string]$Level = 'INFO')
 
     $key = "$Level|$Message"
@@ -45,33 +45,14 @@ function Get-ProcessOwnerSid {
 
 function Test-ConfiguredProcess {
     param($Process, $Config)
-
     if (-not $Process.ExecutablePath) { return $false }
-    if ([string]$Process.Name -ieq 'steamservice.exe') { return $false }
-
-    $isSteam = $false
-    foreach ($name in @($Config.SteamProcessNames)) {
-        if ([string]$Process.Name -ieq [string]$name) { $isSteam = $true; break }
-    }
-    if ($isSteam -and (Test-PathInsideDirectory -Path $Process.ExecutablePath -Directory $Config.SteamPath)) {
-        return $true
-    }
-
-    foreach ($directory in @($Config.GameDirectories)) {
-        if (Test-PathInsideDirectory -Path $Process.ExecutablePath -Directory ([string]$directory)) { return $true }
-    }
-    $processPath = ConvertTo-NormalizedPath $Process.ExecutablePath
-    foreach ($executable in @($Config.ExtraExecutables)) {
-        $configuredPath = ConvertTo-NormalizedPath ([string]$executable)
-        if ($processPath -and $configuredPath -and $processPath.Equals($configuredPath, [StringComparison]::OrdinalIgnoreCase)) { return $true }
-    }
-    return $false
+    return Test-ConfiguredExecutablePath -ProcessPath ([string]$Process.ExecutablePath) -Executables @($Config.Executables)
 }
 
-function Invoke-SteamCurfewCheck {
+function Invoke-AppBlockerCheck {
     param($Config, [datetime]$CurrentTime)
 
-    if (-not (Test-SteamBlockTime -CurrentTime $CurrentTime -BlockStart $Config.BlockStart -BlockEnd $Config.BlockEnd)) { return }
+    if (-not (Test-AppBlockerTime -CurrentTime $CurrentTime -BlockStart $Config.BlockStart -BlockEnd $Config.BlockEnd)) { return }
 
     $processes = Get-CimInstance -ClassName Win32_Process -ErrorAction Stop
     foreach ($process in $processes) {
@@ -79,21 +60,22 @@ function Invoke-SteamCurfewCheck {
         if ((Get-ProcessOwnerSid -Process $process) -ne [string]$Config.TargetUserSid) { continue }
 
         try {
+            # Re-read and re-check the process to avoid terminating a PID that Windows has already reused.
             $current = Get-CimInstance -ClassName Win32_Process -Filter ("ProcessId = {0}" -f $process.ProcessId) -ErrorAction Stop
             if (-not $current -or $current.CreationDate -ne $process.CreationDate) { continue }
             if (-not (Test-ConfiguredProcess -Process $current -Config $Config)) { continue }
             if ((Get-ProcessOwnerSid -Process $current) -ne [string]$Config.TargetUserSid) { continue }
 
             if ($DryRun) {
-                Write-CurfewLog -Message ("Would stop {0} (PID {1})" -f $current.Name, $current.ProcessId)
+                Write-AppBlockerLog -Message ("Would stop {0} (PID {1})" -f $current.Name, $current.ProcessId)
             } else {
                 Stop-Process -Id $current.ProcessId -Force -ErrorAction Stop
-                Write-CurfewLog -Message ("Stopped {0} (PID {1})" -f $current.Name, $current.ProcessId)
+                Write-AppBlockerLog -Message ("Stopped {0} (PID {1})" -f $current.Name, $current.ProcessId)
             }
         } catch [Microsoft.PowerShell.Commands.ProcessCommandException] {
             # The process exited between inspection and termination.
         } catch {
-            Write-CurfewLog -Level 'ERROR' -Message ("Could not stop {0} (PID {1}): {2}" -f $process.Name, $process.ProcessId, $_.Exception.Message)
+            Write-AppBlockerLog -Level 'ERROR' -Message ("Could not stop {0} (PID {1}): {2}" -f $process.Name, $process.ProcessId, $_.Exception.Message)
         }
     }
 }
@@ -102,19 +84,19 @@ $mutex = $null
 $ownsMutex = $false
 try {
     $createdNew = $false
-    $mutex = New-Object Threading.Mutex($true, 'Global\SteamCurfewMonitor', [ref]$createdNew)
+    $mutex = New-Object Threading.Mutex($true, 'Global\WindowsAppBlockerMonitor', [ref]$createdNew)
     if (-not $createdNew) { exit 0 }
     $ownsMutex = $true
 
     do {
-        $config = Get-SteamBlockConfig -Path $ConfigPath
+        $config = Get-AppBlockerConfig -Path $ConfigPath
         $currentTime = if ($AtTime -ne [datetime]::MinValue) { $AtTime } else { Get-Date }
-        Invoke-SteamCurfewCheck -Config $config -CurrentTime $currentTime
+        Invoke-AppBlockerCheck -Config $config -CurrentTime $currentTime
         if ($Once) { break }
         Start-Sleep -Seconds ([int]$config.CheckIntervalSeconds)
     } while ($true)
 } catch {
-    try { Write-CurfewLog -Level 'FATAL' -Message $_.Exception.Message } catch { }
+    try { Write-AppBlockerLog -Level 'FATAL' -Message $_.Exception.Message } catch { }
     Write-Error $_
     exit 1
 } finally {
