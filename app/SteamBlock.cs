@@ -54,7 +54,7 @@ namespace SteamBlock
         public MainForm()
         {
             Text = "Steam Block";
-            ClientSize = new Size(480, 390);
+            ClientSize = new Size(480, 415);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -152,7 +152,7 @@ namespace SteamBlock
         {
             config = LoadConfig();
             Controls.Clear();
-            ClientSize = new Size(480, 390);
+            ClientSize = new Size(480, 415);
             AddHeader();
 
             statusPanel = new Panel();
@@ -181,9 +181,16 @@ namespace SteamBlock
             toggleButton.Click += delegate { ToggleProtection(); };
             Controls.Add(toggleButton);
 
-            Label note = MakeLabel("You can close this window. Protection keeps running quietly.", 9F, FontStyle.Regular, 25, 326, 425, 34);
+            Label note = MakeLabel("You can close this window. Protection keeps running quietly.", 9F, FontStyle.Regular, 25, 319, 425, 30);
             note.ForeColor = Color.FromArgb(90, 96, 105);
             Controls.Add(note);
+
+            Button uninstallButton = MakeButton("Uninstall Steam Block", 296, 359, 160, 32);
+            uninstallButton.BackColor = Color.FromArgb(235, 238, 242);
+            uninstallButton.ForeColor = Color.FromArgb(90, 96, 105);
+            uninstallButton.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            uninstallButton.Click += delegate { UninstallApplication(); };
+            Controls.Add(uninstallButton);
 
             RefreshStatus();
         }
@@ -264,6 +271,35 @@ namespace SteamBlock
             catch (Exception exception)
             {
                 MessageBox.Show(this, exception.Message, "Could not change protection", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void UninstallApplication()
+        {
+            DialogResult choice = MessageBox.Show(
+                this,
+                "This will turn protection off and completely remove Steam Block from this computer.\n\nDo you want to continue?",
+                "Uninstall Steam Block?",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2
+            );
+            if (choice != DialogResult.Yes) return;
+
+            try
+            {
+                string uninstaller = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Uninstall-SteamCurfew.ps1");
+                if (!File.Exists(uninstaller)) uninstaller = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app", "Uninstall-SteamCurfew.ps1");
+                if (!File.Exists(uninstaller)) throw new FileNotFoundException("The uninstall helper could not be found.");
+
+                RunPowerShellScript(uninstaller, "-RemoveFiles -WaitForProcessId " + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture));
+                MessageBox.Show(this, "Steam Block has been turned off and will finish removing itself when this window closes.", "Uninstall started", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                refreshTimer.Stop();
+                Application.Exit();
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show(this, exception.Message, "Could not uninstall Steam Block", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -351,9 +387,14 @@ namespace SteamBlock
             if (!File.Exists(installer)) installer = Path.Combine(baseDirectory, "app", "Install-SteamCurfew.ps1");
             if (!File.Exists(installer)) throw new FileNotFoundException("The app folder is missing. Extract the complete download before installing.");
 
+            RunPowerShellScript(installer, "-NoStart");
+        }
+
+        private static void RunPowerShellScript(string scriptPath, string arguments)
+        {
             ProcessStartInfo info = new ProcessStartInfo();
             info.FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), @"System32\WindowsPowerShell\v1.0\powershell.exe");
-            info.Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + installer + "\" -NoStart";
+            info.Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + scriptPath + "\" " + arguments;
             info.UseShellExecute = false;
             info.CreateNoWindow = true;
             info.WindowStyle = ProcessWindowStyle.Hidden;

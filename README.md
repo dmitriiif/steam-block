@@ -36,7 +36,7 @@ Steam Block only closes matching processes owned by the Windows user who install
 
 - `Steam Block.exe` is the only file you need to open.
 - `app` contains the application source and background scripts.
-- `docs` contains this guide and the original implementation plan.
+- `README.md` is this guide.
 - `tests` contains safe automated checks.
 
 Installed runtime files are protected under `C:\ProgramData\SteamCurfew`. The scheduled task is named `SteamCurfew`.
@@ -53,13 +53,7 @@ For a practical test, save any open game, choose a short period containing the c
 
 ## Uninstall
 
-Turn protection off first. Open an administrator PowerShell window in the project folder and run:
-
-```powershell
-.\app\Uninstall-SteamCurfew.ps1 -RemoveFiles
-```
-
-Without `-RemoveFiles`, the scheduled task and Start menu entry are removed while settings and logs remain under `C:\ProgramData\SteamCurfew`.
+Open Steam Block and select **Uninstall Steam Block**. The app shows a warning before it turns protection off and completely removes the scheduled task, Start menu entry, settings, logs, and installed application files.
 
 Steam Block is a self-control aid. A Windows administrator can disable or uninstall it.
 
