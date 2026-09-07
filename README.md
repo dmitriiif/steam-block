@@ -58,3 +58,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\app\Build.ps1
 ```
 
 This recreates `Steam Block.exe`.
+
+## License
+
+Steam Block is available under the [MIT License](LICENSE).
