@@ -1,0 +1,136 @@
+STEAM-BLOCK: WINDOWS 11 IMPLEMENTATION PLAN
+
+Objective
+Create a PowerShell background script managed by Windows Task Scheduler. It checks the time every two seconds and closes Steam and configured games during blocked hours.
+
+1. DEFINE THE BEHAVIOR
+
+Target Windows 11 and built-in Windows PowerShell 5.1, with no third-party dependencies.
+
+Configurable defaults:
+- Block starts: 23:00.
+- Block ends: 07:00.
+- Days: every day.
+- Check interval: 2 seconds.
+- Account affected: installing user.
+
+The morning unblock time is an assumption; make it easy to change. Blocking must continue across midnight.
+
+At 23:00, terminate matching processes. If the user reopens Steam or a configured game during blocked hours, terminate it on the next check. At 07:00, stop enforcing; do not automatically launch Steam.
+
+This is a practical self-control barrier. Someone with administrator access can disable it, and a process can briefly appear before the next check.
+
+2. CREATE THESE DELIVERABLES
+
+- SteamCurfew.ps1: background monitoring and enforcement.
+- config.json: schedule, target account SID, Steam location, and game targets.
+- Install-SteamCurfew.ps1: validates configuration, installs files, and registers the scheduled task.
+- Uninstall-SteamCurfew.ps1: stops and removes the task, with optional removal of its files.
+- README.md: installation, configuration, testing, troubleshooting, and removal instructions.
+
+Install runtime files under C:\ProgramData\SteamCurfew. Require administrator elevation for installation. Give Administrators and SYSTEM write access; give the target user read access. Do not execute elevated scripts from a user-writable directory.
+
+3. IMPLEMENT AND TEST THE TIME RULE SEPARATELY
+
+Create a function accepting the current local time, block start, and block end:
+
+If start > end: blocked = current >= start OR current < end.
+If start < end: blocked = current >= start AND current < end.
+If start = end: reject configuration as ambiguous.
+
+Start is inclusive; end is exclusive.
+
+Read the current Windows local time on every iteration. Do not calculate one long sleep until morning: repeated evaluation handles midnight, resume from sleep, and clock changes.
+
+Validate HH:mm values and require a positive, bounded polling interval.
+
+4. IDENTIFY STEAM AND THE GAMES TO TERMINATE
+
+Do not assume closing Steam closes every game. Match games independently of whether Steam is still running.
+
+During installation:
+- Discover Steam's installation directory from the target user's registry settings, with an explicit path override.
+- Discover library locations from Steam's steamapps\libraryfolders.vdf; use a parser that supports quoted and escaped paths.
+- Produce a reviewable list of installed game directories selected for blocking.
+- Support additional exact executable paths for games or launchers installed elsewhere.
+- Explain that newly installed games outside the configured directories require updating the configuration.
+
+During enforcement:
+- Match steam.exe and Steam helper processes by expected executable name and installation path.
+- Match game processes by their configured game directories or explicit executable paths.
+- Compare normalized paths case-insensitively, with directory boundaries: D:\Games\Example\ must not match D:\Games\ExampleOther\.
+- Filter by the configured account SID.
+- Leave Steam's system service alone.
+
+Use Get-CimInstance Win32_Process to inspect executable paths and retrieve ownership. Do not rely solely on parent-process relationships; parent processes can exit and Windows can reuse their IDs.
+
+Reference: https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process
+
+5. IMPLEMENT THE ENFORCEMENT LOOP
+
+Validate configuration and acquire a single-instance lock.
+
+Repeat:
+    Read current local time.
+    If blocked:
+        Enumerate processes.
+        Select configured Steam/game processes belonging to the target user.
+        Revalidate each process's identity before termination.
+        Force-stop each matching process.
+        Log successful stops and actionable failures.
+    Sleep for the configured interval.
+
+Use Stop-Process -Id ... -Force for termination. Treat a process that already exited as a normal race; log access-denied errors and continue checking other targets. Forced termination can lose unsaved game progress, so document that behavior clearly.
+
+Include a -DryRun mode that reports matches without stopping anything. Avoid recording full command lines in logs. Rotate logs and suppress repeated identical errors.
+
+Reference: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/stop-process?view=powershell-5.1
+
+6. REGISTER THE SCHEDULED TASK
+
+Name it SteamCurfew. Run it as SYSTEM so it can terminate elevated game processes, while enforcing the target-account filter.
+
+Configure:
+- Startup trigger and target-user logon trigger.
+- Immediate start after installation.
+- Hidden, noninteractive PowerShell execution using an absolute executable and script path.
+- MultipleInstances = IgnoreNew.
+- No execution time limit.
+- Start on battery and continue when switching to battery.
+- No idle or network requirement.
+- Restart after failure, with a one-minute delay and a configured retry count.
+- StartWhenAvailable enabled.
+
+Use a named mutex as an additional guard against manually started duplicate monitors. Ensure fatal errors exit with a nonzero code so task failure recovery works.
+
+Reference: https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasksettingsset
+
+7. MAKE INSTALLATION AND UPDATES PREDICTABLE
+
+The installer should validate files and configuration before enabling enforcement, record the intended user's SID explicitly, and support rerunning without creating duplicate tasks.
+
+When updating, stop the existing task, replace validated files, and restart it. Document that configuration changes take effect after restarting the task.
+
+Uninstallation must stop the running monitor as well as unregister the task. Restrict optional deletion to the verified installation directory.
+
+8. VERIFY ACCEPTANCE CRITERIA
+
+Test time logic using supplied timestamps instead of changing the computer clock:
+- 22:59:59: allowed.
+- 23:00:00: blocked.
+- 00:00:00: blocked.
+- 06:59:59: blocked.
+- 07:00:00: allowed.
+
+First verify process selection with dry-run mode. Then use a temporary blocked window and a harmless test executable to confirm termination.
+
+Finally, after saving game progress, verify:
+- Running Steam and a selected game close during blocked hours.
+- Reopening either causes closure within approximately two seconds plus processing time.
+- Games are detected even when Steam has already exited.
+- Unrelated applications and another Windows user's processes remain running.
+- Reboot, logon, sleep/resume, and battery transitions preserve enforcement.
+- Duplicate launches do not create duplicate monitors.
+- Uninstalling stops enforcement completely.
+
+The implementing model should report which checks actually passed and which still need testing on the user's machine.
