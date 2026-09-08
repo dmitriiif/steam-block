@@ -52,7 +52,7 @@ function Test-ConfiguredProcess {
 function Invoke-AppBlockerCheck {
     param($Config, [datetime]$CurrentTime)
 
-    if (-not (Test-AppBlockerTime -CurrentTime $CurrentTime -BlockStart $Config.BlockStart -BlockEnd $Config.BlockEnd)) { return }
+    if (-not (Test-AppBlockerSchedule -CurrentTime $CurrentTime -Config $Config)) { return }
 
     $processes = Get-CimInstance -ClassName Win32_Process -ErrorAction Stop
     foreach ($process in $processes) {

@@ -118,4 +118,4 @@ if ($NoStart) { Disable-ScheduledTask -TaskName $taskName | Out-Null }
 else { Start-ScheduledTask -TaskName $taskName }
 
 Write-Output ("Windows App Blocker installed with {0} configured app(s)." -f @($config.Executables).Count)
-Write-Output 'Open "Windows App Blocker" from the Start menu to choose apps, change the schedule, or enable protection.'
+Write-Output 'Open "Windows App Blocker" from the Start menu to manage apps and protection within the choices made during setup.'

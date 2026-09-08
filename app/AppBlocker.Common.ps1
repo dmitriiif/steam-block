@@ -32,6 +32,46 @@ function Test-AppBlockerTime {
     return ($now -ge $start -or $now -lt $end)
 }
 
+function Get-AppBlockerDaySchedule {
+    param(
+        [Parameter(Mandatory = $true)]$Config,
+        [Parameter(Mandatory = $true)][DayOfWeek]$DayOfWeek
+    )
+
+    if ([string]$Config.ScheduleMode -eq 'IndividualDays') {
+        $prefix = [string]$DayOfWeek
+        return @([string]$Config."${prefix}BlockStart", [string]$Config."${prefix}BlockEnd")
+    }
+    $isWeekend = $DayOfWeek -eq [DayOfWeek]::Saturday -or $DayOfWeek -eq [DayOfWeek]::Sunday
+    if ($isWeekend) {
+        return @([string]$Config.WeekendBlockStart, [string]$Config.WeekendBlockEnd)
+    }
+    return @([string]$Config.WeekdayBlockStart, [string]$Config.WeekdayBlockEnd)
+}
+
+function Test-AppBlockerSchedule {
+    param(
+        [Parameter(Mandatory = $true)][datetime]$CurrentTime,
+        [Parameter(Mandatory = $true)]$Config
+    )
+
+    if ([string]$Config.ScheduleMode -eq 'EveryDay') {
+        return Test-AppBlockerTime -CurrentTime $CurrentTime -BlockStart ([string]$Config.BlockStart) -BlockEnd ([string]$Config.BlockEnd)
+    }
+
+    $today = Get-AppBlockerDaySchedule -Config $Config -DayOfWeek $CurrentTime.DayOfWeek
+    $todayStart = ConvertTo-AppBlockerTime $today[0]
+    $todayEnd = ConvertTo-AppBlockerTime $today[1]
+    $now = $CurrentTime.TimeOfDay
+    if ($todayStart -lt $todayEnd -and $now -ge $todayStart -and $now -lt $todayEnd) { return $true }
+    if ($todayStart -gt $todayEnd -and $now -ge $todayStart) { return $true }
+
+    $yesterday = Get-AppBlockerDaySchedule -Config $Config -DayOfWeek $CurrentTime.AddDays(-1).DayOfWeek
+    $yesterdayStart = ConvertTo-AppBlockerTime $yesterday[0]
+    $yesterdayEnd = ConvertTo-AppBlockerTime $yesterday[1]
+    return ($yesterdayStart -gt $yesterdayEnd -and $now -lt $yesterdayEnd)
+}
+
 function ConvertTo-NormalizedPath {
     param([AllowNull()][AllowEmptyString()][string]$Path)
 
@@ -63,9 +103,60 @@ function Get-AppBlockerConfig {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Configuration file not found: $Path" }
     $config = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
 
+    $defaults = @{
+        ScheduleMode = 'EveryDay'
+        WeekdayBlockStart = [string]$config.BlockStart
+        WeekdayBlockEnd = [string]$config.BlockEnd
+        WeekendBlockStart = [string]$config.BlockStart
+        WeekendBlockEnd = [string]$config.BlockEnd
+        ChangeTimesPolicy = 'Always'
+        TurnOffProtectionPolicy = 'Always'
+        UninstallPolicy = 'Always'
+        RemoveExecutablesPolicy = 'Always'
+        SetupCompleted = $false
+        SetupVersion = 0
+    }
+    foreach ($propertyName in $defaults.Keys) {
+        if (-not ($config.PSObject.Properties.Name -contains $propertyName)) {
+            $config | Add-Member -NotePropertyName $propertyName -NotePropertyValue $defaults[$propertyName]
+        }
+    }
+
+    $individualDefaults = @{}
+    foreach ($dayName in @('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')) {
+        $individualDefaults["${dayName}BlockStart"] = [string]$config.WeekdayBlockStart
+        $individualDefaults["${dayName}BlockEnd"] = [string]$config.WeekdayBlockEnd
+    }
+    foreach ($dayName in @('Saturday', 'Sunday')) {
+        $individualDefaults["${dayName}BlockStart"] = [string]$config.WeekendBlockStart
+        $individualDefaults["${dayName}BlockEnd"] = [string]$config.WeekendBlockEnd
+    }
+    foreach ($propertyName in $individualDefaults.Keys) {
+        if (-not ($config.PSObject.Properties.Name -contains $propertyName)) {
+            $config | Add-Member -NotePropertyName $propertyName -NotePropertyValue $individualDefaults[$propertyName]
+        }
+    }
+
+    if ([string]$config.ScheduleMode -notin @('EveryDay', 'WeekdayWeekend', 'IndividualDays')) {
+        throw "ScheduleMode must be 'EveryDay', 'WeekdayWeekend', or 'IndividualDays'."
+    }
     [void](ConvertTo-AppBlockerTime ([string]$config.BlockStart))
     [void](ConvertTo-AppBlockerTime ([string]$config.BlockEnd))
     if ([string]$config.BlockStart -eq [string]$config.BlockEnd) { throw 'BlockStart and BlockEnd must be different.' }
+    foreach ($prefix in @('Weekday', 'Weekend', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')) {
+        $startProperty = "${prefix}BlockStart"
+        $endProperty = "${prefix}BlockEnd"
+        [void](ConvertTo-AppBlockerTime ([string]$config.$startProperty))
+        [void](ConvertTo-AppBlockerTime ([string]$config.$endProperty))
+        if ([string]$config.$startProperty -eq [string]$config.$endProperty) {
+            throw "$startProperty and $endProperty must be different."
+        }
+    }
+    foreach ($policyProperty in @('ChangeTimesPolicy', 'TurnOffProtectionPolicy', 'UninstallPolicy', 'RemoveExecutablesPolicy')) {
+        if ([string]$config.$policyProperty -notin @('Always', 'Never', 'AllowedHoursOnly')) {
+            throw "$policyProperty has an invalid value."
+        }
+    }
     if ([int]$config.CheckIntervalSeconds -lt 1 -or [int]$config.CheckIntervalSeconds -gt 60) {
         throw 'CheckIntervalSeconds must be between 1 and 60.'
     }
