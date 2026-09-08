@@ -1038,6 +1038,7 @@ namespace WindowsAppBlocker
                 folder = service.GetFolder("\\");
                 return folder.GetTask(TaskName);
             }
+            catch (FileNotFoundException) { return null; }
             catch (COMException) { return null; }
             finally { ReleaseComObject(folder); ReleaseComObject(service); }
         }
