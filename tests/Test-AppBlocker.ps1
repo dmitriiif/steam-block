@@ -37,6 +37,24 @@ Assert-Equal $true  (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-10
 Assert-Equal $true  (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-11 13:59:59') -Config $splitSchedule) 'Sunday uses weekend schedule'
 Assert-Equal $false (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-12 09:00:00') -Config $splitSchedule) 'Monday does not inherit a non-overnight Sunday schedule'
 
+$disabledWeekendSchedule = [pscustomobject]@{
+    ScheduleMode = 'WeekdayWeekend'
+    BlockStart = '23:00'; BlockEnd = '07:00'
+    WeekdayBlockStart = '22:00'; WeekdayBlockEnd = '06:00'; WeekdayEnabled = $true
+    WeekendBlockStart = '12:00'; WeekendBlockEnd = '14:00'; WeekendEnabled = $false
+}
+Assert-Equal $true  (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-10 05:30:00') -Config $disabledWeekendSchedule) 'Disabled weekend still finishes enabled Friday overnight schedule'
+Assert-Equal $false (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-10 12:30:00') -Config $disabledWeekendSchedule) 'Disabled weekend starts no blocking period'
+
+$disabledWeekdaySchedule = [pscustomobject]@{
+    ScheduleMode = 'WeekdayWeekend'
+    BlockStart = '23:00'; BlockEnd = '07:00'
+    WeekdayBlockStart = '22:00'; WeekdayBlockEnd = '06:00'; WeekdayEnabled = $false
+    WeekendBlockStart = '12:00'; WeekendBlockEnd = '14:00'; WeekendEnabled = $true
+}
+Assert-Equal $false (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-09 23:30:00') -Config $disabledWeekdaySchedule) 'Disabled weekdays start no blocking period'
+Assert-Equal $true  (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-10 12:30:00') -Config $disabledWeekdaySchedule) 'Enabled weekend schedule still applies'
+
 $dailySchedule = [pscustomobject]@{
     ScheduleMode = 'EveryDay'
     BlockStart = '23:00'
@@ -50,17 +68,25 @@ $individualSchedule = [pscustomobject]@{
     WeekdayBlockStart = '23:00'; WeekdayBlockEnd = '07:00'
     WeekendBlockStart = '00:00'; WeekendBlockEnd = '09:00'
     MondayBlockStart = '10:00'; MondayBlockEnd = '11:00'
+    MondayEnabled = $true
     TuesdayBlockStart = '12:00'; TuesdayBlockEnd = '13:00'
+    TuesdayEnabled = $true
     WednesdayBlockStart = '14:00'; WednesdayBlockEnd = '15:00'
+    WednesdayEnabled = $false
     ThursdayBlockStart = '16:00'; ThursdayBlockEnd = '17:00'
+    ThursdayEnabled = $true
     FridayBlockStart = '22:00'; FridayBlockEnd = '06:00'
+    FridayEnabled = $true
     SaturdayBlockStart = '12:00'; SaturdayBlockEnd = '13:00'
+    SaturdayEnabled = $false
     SundayBlockStart = '18:00'; SundayBlockEnd = '19:00'
+    SundayEnabled = $true
 }
-Assert-Equal $true  (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-07 14:30:00') -Config $individualSchedule) 'Individual Wednesday schedule applies'
+Assert-Equal $false (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-07 14:30:00') -Config $individualSchedule) 'Disabled individual Wednesday starts no blocking period'
 Assert-Equal $false (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-07 12:30:00') -Config $individualSchedule) 'Tuesday hours do not apply on Wednesday'
 Assert-Equal $true  (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-10 05:30:00') -Config $individualSchedule) 'Individual Friday overnight schedule finishes Saturday'
 Assert-Equal $false (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-10 06:30:00') -Config $individualSchedule) 'Individual overnight end is respected'
+Assert-Equal $false (Test-AppBlockerSchedule -CurrentTime ([datetime]'2026-01-10 12:30:00') -Config $individualSchedule) 'Disabled individual Saturday starts no blocking period'
 
 $targets = @('C:\Program Files\Example\Example.exe', 'D:\Tools\Editor.exe')
 Assert-Equal $true  (Test-ConfiguredExecutablePath -ProcessPath 'c:\program files\example\EXAMPLE.EXE' -Executables $targets) 'Executable paths are case insensitive'
@@ -92,9 +118,33 @@ try {
     Assert-Equal 'Always' $loaded.UninstallPolicy 'Legacy config receives permissive policy default'
     Assert-Equal 'Always' $loaded.TurnOffProtectionPolicy 'Legacy config receives protection policy default'
     Assert-Equal '23:00' $loaded.MondayBlockStart 'Legacy config receives individual-day defaults'
+    Assert-Equal $true $loaded.WeekdayEnabled 'Legacy config enables weekdays by default'
+    Assert-Equal $true $loaded.WeekendEnabled 'Legacy config enables weekends by default'
+    Assert-Equal $true $loaded.MondayEnabled 'Legacy config enables individual days by default'
 } finally {
     Remove-Item -LiteralPath $testConfigPath -Force -ErrorAction SilentlyContinue
 }
+
+$disabledEqualScheduleAccepted = $true
+try {
+    [pscustomobject]@{
+        BlockStart = '23:00'
+        BlockEnd = '07:00'
+        ScheduleMode = 'IndividualDays'
+        MondayBlockStart = '10:00'
+        MondayBlockEnd = '10:00'
+        MondayEnabled = $false
+        CheckIntervalSeconds = 2
+        TargetUserSid = 'S-1-5-21-1000-1000-1000-1000'
+        Executables = @()
+    } | ConvertTo-Json | Set-Content -LiteralPath $testConfigPath -Encoding UTF8
+    [void](Get-AppBlockerConfig -Path $testConfigPath)
+} catch {
+    $disabledEqualScheduleAccepted = $false
+} finally {
+    Remove-Item -LiteralPath $testConfigPath -Force -ErrorAction SilentlyContinue
+}
+Assert-Equal $true $disabledEqualScheduleAccepted 'Disabled day does not require a time range'
 
 $badSidRejected = $false
 try {

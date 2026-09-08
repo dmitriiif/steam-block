@@ -49,6 +49,24 @@ function Get-AppBlockerDaySchedule {
     return @([string]$Config.WeekdayBlockStart, [string]$Config.WeekdayBlockEnd)
 }
 
+function Test-AppBlockerDayEnabled {
+    param(
+        [Parameter(Mandatory = $true)]$Config,
+        [Parameter(Mandatory = $true)][DayOfWeek]$DayOfWeek
+    )
+
+    if ([string]$Config.ScheduleMode -eq 'IndividualDays') {
+        $propertyName = "${DayOfWeek}Enabled"
+    } else {
+        $isWeekend = $DayOfWeek -eq [DayOfWeek]::Saturday -or $DayOfWeek -eq [DayOfWeek]::Sunday
+        $propertyName = if ($isWeekend) { 'WeekendEnabled' } else { 'WeekdayEnabled' }
+    }
+    if (-not ($Config.PSObject.Properties.Name -contains $propertyName)) { return $true }
+    $value = $Config.$propertyName
+    if ($null -eq $value) { return $true }
+    return [bool]$value
+}
+
 function Test-AppBlockerSchedule {
     param(
         [Parameter(Mandatory = $true)][datetime]$CurrentTime,
@@ -63,13 +81,15 @@ function Test-AppBlockerSchedule {
     $todayStart = ConvertTo-AppBlockerTime $today[0]
     $todayEnd = ConvertTo-AppBlockerTime $today[1]
     $now = $CurrentTime.TimeOfDay
-    if ($todayStart -lt $todayEnd -and $now -ge $todayStart -and $now -lt $todayEnd) { return $true }
-    if ($todayStart -gt $todayEnd -and $now -ge $todayStart) { return $true }
+    $todayEnabled = Test-AppBlockerDayEnabled -Config $Config -DayOfWeek $CurrentTime.DayOfWeek
+    if ($todayEnabled -and $todayStart -lt $todayEnd -and $now -ge $todayStart -and $now -lt $todayEnd) { return $true }
+    if ($todayEnabled -and $todayStart -gt $todayEnd -and $now -ge $todayStart) { return $true }
 
     $yesterday = Get-AppBlockerDaySchedule -Config $Config -DayOfWeek $CurrentTime.AddDays(-1).DayOfWeek
     $yesterdayStart = ConvertTo-AppBlockerTime $yesterday[0]
     $yesterdayEnd = ConvertTo-AppBlockerTime $yesterday[1]
-    return ($yesterdayStart -gt $yesterdayEnd -and $now -lt $yesterdayEnd)
+    $yesterdayEnabled = Test-AppBlockerDayEnabled -Config $Config -DayOfWeek $CurrentTime.AddDays(-1).DayOfWeek
+    return ($yesterdayEnabled -and $yesterdayStart -gt $yesterdayEnd -and $now -lt $yesterdayEnd)
 }
 
 function ConvertTo-NormalizedPath {
@@ -109,6 +129,8 @@ function Get-AppBlockerConfig {
         WeekdayBlockEnd = [string]$config.BlockEnd
         WeekendBlockStart = [string]$config.BlockStart
         WeekendBlockEnd = [string]$config.BlockEnd
+        WeekdayEnabled = $true
+        WeekendEnabled = $true
         ChangeTimesPolicy = 'Always'
         TurnOffProtectionPolicy = 'Always'
         UninstallPolicy = 'Always'
@@ -126,10 +148,12 @@ function Get-AppBlockerConfig {
     foreach ($dayName in @('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')) {
         $individualDefaults["${dayName}BlockStart"] = [string]$config.WeekdayBlockStart
         $individualDefaults["${dayName}BlockEnd"] = [string]$config.WeekdayBlockEnd
+        $individualDefaults["${dayName}Enabled"] = $true
     }
     foreach ($dayName in @('Saturday', 'Sunday')) {
         $individualDefaults["${dayName}BlockStart"] = [string]$config.WeekendBlockStart
         $individualDefaults["${dayName}BlockEnd"] = [string]$config.WeekendBlockEnd
+        $individualDefaults["${dayName}Enabled"] = $true
     }
     foreach ($propertyName in $individualDefaults.Keys) {
         if (-not ($config.PSObject.Properties.Name -contains $propertyName)) {
@@ -148,7 +172,9 @@ function Get-AppBlockerConfig {
         $endProperty = "${prefix}BlockEnd"
         [void](ConvertTo-AppBlockerTime ([string]$config.$startProperty))
         [void](ConvertTo-AppBlockerTime ([string]$config.$endProperty))
-        if ([string]$config.$startProperty -eq [string]$config.$endProperty) {
+        $enabledProperty = "${prefix}Enabled"
+        $scheduleEnabled = -not ($config.PSObject.Properties.Name -contains $enabledProperty) -or $null -eq $config.$enabledProperty -or [bool]$config.$enabledProperty
+        if ($scheduleEnabled -and [string]$config.$startProperty -eq [string]$config.$endProperty) {
             throw "$startProperty and $endProperty must be different."
         }
     }

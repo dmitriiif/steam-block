@@ -7,13 +7,15 @@ Windows App Blocker is a small Windows 11 utility that closes apps you choose du
 1. Download and extract the complete project folder.
 2. Double-click **Windows App Blocker.exe** in the main folder.
 3. Approve the Windows administrator prompt.
-4. Complete the one-time setup: choose the same hours every day, separate weekday/weekend hours, or individual hours for all seven days. Then select the apps to block and decide which controls remain available later.
+4. Complete the one-time setup: choose the same hours every day, separate weekday/weekend hours, or individual hours for all seven days. Weekday/weekend groups and individual days can be turned off when no blocking period should start on them. Then select the apps to block and decide which controls remain available later.
 5. Choose whether to add Start menu and desktop shortcuts, then select **Install and finish setup**.
 6. Turn protection on from the control panel.
 
 You can then open **Windows App Blocker** from the Windows Start menu. Closing the control panel does not stop protection.
 
 Protection starts off, so setup cannot unexpectedly close an app. The default block window is 23:00–07:00. Overnight windows work as expected: a 23:00–07:00 schedule blocks apps from 23:00 through 06:59. With a weekday/weekend schedule, an overnight period finishes using the schedule of the day on which it started.
+
+When an individual day or a weekday/weekend group is disabled, it starts no blocking period. An overnight period that began on the previous enabled day still continues until its configured end time.
 
 During setup, changing hours, turning protection off, removing apps from the block list, and uninstalling can each be set to **Yes — anytime**, **No — never**, or **Only during allowed hours**. “Allowed hours” are times when the configured schedule permits the blocked apps to run. The turn-off policy never prevents turning protection on. These setup policies are fixed in the app; locked controls are disabled in the control panel, and permanent **No — never** choices require confirmation.
 

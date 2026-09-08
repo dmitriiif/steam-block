@@ -20,20 +20,29 @@ namespace WindowsAppBlocker
         public string WeekdayBlockEnd { get; set; }
         public string WeekendBlockStart { get; set; }
         public string WeekendBlockEnd { get; set; }
+        public bool? WeekdayEnabled { get; set; }
+        public bool? WeekendEnabled { get; set; }
         public string MondayBlockStart { get; set; }
         public string MondayBlockEnd { get; set; }
+        public bool? MondayEnabled { get; set; }
         public string TuesdayBlockStart { get; set; }
         public string TuesdayBlockEnd { get; set; }
+        public bool? TuesdayEnabled { get; set; }
         public string WednesdayBlockStart { get; set; }
         public string WednesdayBlockEnd { get; set; }
+        public bool? WednesdayEnabled { get; set; }
         public string ThursdayBlockStart { get; set; }
         public string ThursdayBlockEnd { get; set; }
+        public bool? ThursdayEnabled { get; set; }
         public string FridayBlockStart { get; set; }
         public string FridayBlockEnd { get; set; }
+        public bool? FridayEnabled { get; set; }
         public string SaturdayBlockStart { get; set; }
         public string SaturdayBlockEnd { get; set; }
+        public bool? SaturdayEnabled { get; set; }
         public string SundayBlockStart { get; set; }
         public string SundayBlockEnd { get; set; }
+        public bool? SundayEnabled { get; set; }
         public string ChangeTimesPolicy { get; set; }
         public string UninstallPolicy { get; set; }
         public string RemoveExecutablesPolicy { get; set; }
@@ -83,11 +92,14 @@ namespace WindowsAppBlocker
         private DateTimePicker weekdayEndPicker;
         private DateTimePicker weekendStartPicker;
         private DateTimePicker weekendEndPicker;
+        private CheckBox weekdayEnabledCheckBox;
+        private CheckBox weekendEnabledCheckBox;
         private Panel everydayRow;
         private Panel splitRows;
         private Panel individualRows;
         private readonly DateTimePicker[] individualStartPickers = new DateTimePicker[7];
         private readonly DateTimePicker[] individualEndPickers = new DateTimePicker[7];
+        private readonly CheckBox[] individualEnabledCheckBoxes = new CheckBox[7];
         private ListBox executableList;
         private Panel statusPanel;
         private Label statusTitle;
@@ -204,8 +216,8 @@ namespace WindowsAppBlocker
             splitRows = new Panel();
             splitRows.Location = new Point(18, 83);
             splitRows.Size = new Size(570, 82);
-            splitRows.Controls.Add(CreateTimeRow("Mon–Fri", weekdayStart, weekdayEnd, 0, 0, out weekdayStartPicker, out weekdayEndPicker));
-            splitRows.Controls.Add(CreateTimeRow("Sat–Sun", weekendStart, weekendEnd, 0, 41, out weekendStartPicker, out weekendEndPicker));
+            splitRows.Controls.Add(CreateOptionalTimeRow("Mon–Fri", weekdayStart, weekdayEnd, IsScheduleEnabled(setupSeed == null ? null : setupSeed.WeekdayEnabled), 0, 0, out weekdayStartPicker, out weekdayEndPicker, out weekdayEnabledCheckBox));
+            splitRows.Controls.Add(CreateOptionalTimeRow("Sat–Sun", weekendStart, weekendEnd, IsScheduleEnabled(setupSeed == null ? null : setupSeed.WeekendEnabled), 0, 41, out weekendStartPicker, out weekendEndPicker, out weekendEnabledCheckBox));
             splitRows.Visible = splitScheduleRadio.Checked;
             content.Controls.Add(splitRows);
             individualRows = CreateIndividualRows(setupSeed, 18, 83);
@@ -425,8 +437,8 @@ namespace WindowsAppBlocker
             splitRows = new Panel();
             splitRows.Location = new Point(14, 58);
             splitRows.Size = new Size(590, 82);
-            splitRows.Controls.Add(CreateTimeRow("Mon–Fri", config.WeekdayBlockStart, config.WeekdayBlockEnd, 0, 0, out weekdayStartPicker, out weekdayEndPicker));
-            splitRows.Controls.Add(CreateTimeRow("Sat–Sun", config.WeekendBlockStart, config.WeekendBlockEnd, 0, 41, out weekendStartPicker, out weekendEndPicker));
+            splitRows.Controls.Add(CreateOptionalTimeRow("Mon–Fri", config.WeekdayBlockStart, config.WeekdayBlockEnd, IsScheduleEnabled(config.WeekdayEnabled), 0, 0, out weekdayStartPicker, out weekdayEndPicker, out weekdayEnabledCheckBox));
+            splitRows.Controls.Add(CreateOptionalTimeRow("Sat–Sun", config.WeekendBlockStart, config.WeekendBlockEnd, IsScheduleEnabled(config.WeekendEnabled), 0, 41, out weekendStartPicker, out weekendEndPicker, out weekendEnabledCheckBox));
             scheduleGroup.Controls.Add(splitRows);
             individualRows = CreateIndividualRows(config, 14, 58);
             scheduleGroup.Controls.Add(individualRows);
@@ -475,6 +487,28 @@ namespace WindowsAppBlocker
             return panel;
         }
 
+        private static Panel CreateOptionalTimeRow(string labelText, string start, string end, bool enabled, int x, int y, out DateTimePicker startPicker, out DateTimePicker endPicker, out CheckBox enabledCheckBox)
+        {
+            Panel panel = CreateTimeRow(labelText, start, end, x, y, out startPicker, out endPicker);
+            enabledCheckBox = new CheckBox();
+            enabledCheckBox.Text = "Enabled";
+            enabledCheckBox.Checked = enabled;
+            enabledCheckBox.Location = new Point(404, 5);
+            enabledCheckBox.Size = new Size(90, 28);
+            DateTimePicker capturedStart = startPicker;
+            DateTimePicker capturedEnd = endPicker;
+            CheckBox capturedCheckBox = enabledCheckBox;
+            enabledCheckBox.CheckedChanged += delegate
+            {
+                capturedStart.Enabled = capturedCheckBox.Checked;
+                capturedEnd.Enabled = capturedCheckBox.Checked;
+            };
+            startPicker.Enabled = enabled;
+            endPicker.Enabled = enabled;
+            panel.Controls.Add(enabledCheckBox);
+            return panel;
+        }
+
         private Panel CreateIndividualRows(AppBlockerConfig source, int x, int y)
         {
             Panel panel = new Panel();
@@ -493,12 +527,13 @@ namespace WindowsAppBlocker
                 else GetIndividualSchedule(source, index, out start, out end);
                 int column = index % 2;
                 int row = index / 2;
-                panel.Controls.Add(CreateCompactTimeRow(names[index], start, end, column * 292, row * 31, out individualStartPickers[index], out individualEndPickers[index]));
+                bool enabled = source == null || GetIndividualEnabled(source, index);
+                panel.Controls.Add(CreateCompactTimeRow(names[index], start, end, enabled, column * 292, row * 31, out individualStartPickers[index], out individualEndPickers[index], out individualEnabledCheckBoxes[index]));
             }
             return panel;
         }
 
-        private static Panel CreateCompactTimeRow(string labelText, string start, string end, int x, int y, out DateTimePicker startPicker, out DateTimePicker endPicker)
+        private static Panel CreateCompactTimeRow(string labelText, string start, string end, bool enabled, int x, int y, out DateTimePicker startPicker, out DateTimePicker endPicker, out CheckBox enabledCheckBox)
         {
             Panel panel = new Panel();
             panel.Location = new Point(x, y);
@@ -513,6 +548,22 @@ namespace WindowsAppBlocker
             endPicker.Size = new Size(76, 28);
             endPicker.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
             panel.Controls.Add(endPicker);
+            enabledCheckBox = new CheckBox();
+            enabledCheckBox.Text = "On";
+            enabledCheckBox.Checked = enabled;
+            enabledCheckBox.Location = new Point(248, 2);
+            enabledCheckBox.Size = new Size(38, 27);
+            DateTimePicker capturedStart = startPicker;
+            DateTimePicker capturedEnd = endPicker;
+            CheckBox capturedCheckBox = enabledCheckBox;
+            enabledCheckBox.CheckedChanged += delegate
+            {
+                capturedStart.Enabled = capturedCheckBox.Checked;
+                capturedEnd.Enabled = capturedCheckBox.Checked;
+            };
+            startPicker.Enabled = enabled;
+            endPicker.Enabled = enabled;
+            panel.Controls.Add(enabledCheckBox);
             return panel;
         }
 
@@ -546,6 +597,8 @@ namespace WindowsAppBlocker
             if (string.IsNullOrEmpty(loaded.WeekdayBlockEnd)) loaded.WeekdayBlockEnd = loaded.BlockEnd;
             if (string.IsNullOrEmpty(loaded.WeekendBlockStart)) loaded.WeekendBlockStart = loaded.BlockStart;
             if (string.IsNullOrEmpty(loaded.WeekendBlockEnd)) loaded.WeekendBlockEnd = loaded.BlockEnd;
+            if (!loaded.WeekdayEnabled.HasValue) loaded.WeekdayEnabled = true;
+            if (!loaded.WeekendEnabled.HasValue) loaded.WeekendEnabled = true;
             NormalizeIndividualSchedules(loaded);
             if (string.IsNullOrEmpty(loaded.ChangeTimesPolicy)) loaded.ChangeTimesPolicy = Always;
             if (string.IsNullOrEmpty(loaded.TurnOffProtectionPolicy)) loaded.TurnOffProtectionPolicy = Always;
@@ -570,6 +623,32 @@ namespace WindowsAppBlocker
             if (string.IsNullOrEmpty(value.SaturdayBlockEnd)) value.SaturdayBlockEnd = value.WeekendBlockEnd;
             if (string.IsNullOrEmpty(value.SundayBlockStart)) value.SundayBlockStart = value.WeekendBlockStart;
             if (string.IsNullOrEmpty(value.SundayBlockEnd)) value.SundayBlockEnd = value.WeekendBlockEnd;
+            if (!value.MondayEnabled.HasValue) value.MondayEnabled = true;
+            if (!value.TuesdayEnabled.HasValue) value.TuesdayEnabled = true;
+            if (!value.WednesdayEnabled.HasValue) value.WednesdayEnabled = true;
+            if (!value.ThursdayEnabled.HasValue) value.ThursdayEnabled = true;
+            if (!value.FridayEnabled.HasValue) value.FridayEnabled = true;
+            if (!value.SaturdayEnabled.HasValue) value.SaturdayEnabled = true;
+            if (!value.SundayEnabled.HasValue) value.SundayEnabled = true;
+        }
+
+        private static bool IsScheduleEnabled(bool? enabled)
+        {
+            return !enabled.HasValue || enabled.Value;
+        }
+
+        private static bool GetIndividualEnabled(AppBlockerConfig value, int index)
+        {
+            switch (index)
+            {
+                case 0: return IsScheduleEnabled(value.MondayEnabled);
+                case 1: return IsScheduleEnabled(value.TuesdayEnabled);
+                case 2: return IsScheduleEnabled(value.WednesdayEnabled);
+                case 3: return IsScheduleEnabled(value.ThursdayEnabled);
+                case 4: return IsScheduleEnabled(value.FridayEnabled);
+                case 5: return IsScheduleEnabled(value.SaturdayEnabled);
+                default: return IsScheduleEnabled(value.SundayEnabled);
+            }
         }
 
         private static void GetIndividualSchedule(AppBlockerConfig value, int index, out string start, out string end)
@@ -597,6 +676,20 @@ namespace WindowsAppBlocker
                 case 4: value.FridayBlockStart = start; value.FridayBlockEnd = end; break;
                 case 5: value.SaturdayBlockStart = start; value.SaturdayBlockEnd = end; break;
                 default: value.SundayBlockStart = start; value.SundayBlockEnd = end; break;
+            }
+        }
+
+        private static void SetIndividualEnabled(AppBlockerConfig value, int index, bool enabled)
+        {
+            switch (index)
+            {
+                case 0: value.MondayEnabled = enabled; break;
+                case 1: value.TuesdayEnabled = enabled; break;
+                case 2: value.WednesdayEnabled = enabled; break;
+                case 3: value.ThursdayEnabled = enabled; break;
+                case 4: value.FridayEnabled = enabled; break;
+                case 5: value.SaturdayEnabled = enabled; break;
+                default: value.SundayEnabled = enabled; break;
             }
         }
 
@@ -649,14 +742,14 @@ namespace WindowsAppBlocker
             if (everyDayRadio.Checked) ValidateDifferent(everydayStartPicker, everydayEndPicker, "every-day");
             else if (splitScheduleRadio.Checked)
             {
-                ValidateDifferent(weekdayStartPicker, weekdayEndPicker, "weekday");
-                ValidateDifferent(weekendStartPicker, weekendEndPicker, "weekend");
+                if (weekdayEnabledCheckBox.Checked) ValidateDifferent(weekdayStartPicker, weekdayEndPicker, "weekday");
+                if (weekendEnabledCheckBox.Checked) ValidateDifferent(weekendStartPicker, weekendEndPicker, "weekend");
             }
             else
             {
                 string[] names = { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
                 for (int index = 0; index < names.Length; index++)
-                    ValidateDifferent(individualStartPickers[index], individualEndPickers[index], names[index]);
+                    if (individualEnabledCheckBoxes[index].Checked) ValidateDifferent(individualStartPickers[index], individualEndPickers[index], names[index]);
             }
         }
 
@@ -675,11 +768,14 @@ namespace WindowsAppBlocker
             target.WeekdayBlockEnd = weekdayEndPicker.Value.ToString("HH:mm", CultureInfo.InvariantCulture);
             target.WeekendBlockStart = weekendStartPicker.Value.ToString("HH:mm", CultureInfo.InvariantCulture);
             target.WeekendBlockEnd = weekendEndPicker.Value.ToString("HH:mm", CultureInfo.InvariantCulture);
+            target.WeekdayEnabled = weekdayEnabledCheckBox.Checked;
+            target.WeekendEnabled = weekendEnabledCheckBox.Checked;
             for (int index = 0; index < 7; index++)
             {
                 SetIndividualSchedule(target, index,
                     individualStartPickers[index].Value.ToString("HH:mm", CultureInfo.InvariantCulture),
                     individualEndPickers[index].Value.ToString("HH:mm", CultureInfo.InvariantCulture));
+                SetIndividualEnabled(target, index, individualEnabledCheckBoxes[index].Checked);
             }
         }
 
@@ -818,14 +914,17 @@ namespace WindowsAppBlocker
             individualDaysRadio.Enabled = canChangeTimes;
             everydayStartPicker.Enabled = canChangeTimes;
             everydayEndPicker.Enabled = canChangeTimes;
-            weekdayStartPicker.Enabled = canChangeTimes;
-            weekdayEndPicker.Enabled = canChangeTimes;
-            weekendStartPicker.Enabled = canChangeTimes;
-            weekendEndPicker.Enabled = canChangeTimes;
+            weekdayStartPicker.Enabled = canChangeTimes && weekdayEnabledCheckBox.Checked;
+            weekdayEndPicker.Enabled = canChangeTimes && weekdayEnabledCheckBox.Checked;
+            weekendStartPicker.Enabled = canChangeTimes && weekendEnabledCheckBox.Checked;
+            weekendEndPicker.Enabled = canChangeTimes && weekendEnabledCheckBox.Checked;
+            weekdayEnabledCheckBox.Enabled = canChangeTimes;
+            weekendEnabledCheckBox.Enabled = canChangeTimes;
             for (int index = 0; index < 7; index++)
             {
-                individualStartPickers[index].Enabled = canChangeTimes;
-                individualEndPickers[index].Enabled = canChangeTimes;
+                individualStartPickers[index].Enabled = canChangeTimes && individualEnabledCheckBoxes[index].Checked;
+                individualEndPickers[index].Enabled = canChangeTimes && individualEnabledCheckBoxes[index].Checked;
+                individualEnabledCheckBoxes[index].Enabled = canChangeTimes;
             }
             removeButton.Enabled = canRemove;
             uninstallButton.Enabled = canUninstall;
@@ -872,19 +971,21 @@ namespace WindowsAppBlocker
 
             string todayStart;
             string todayEnd;
-            GetScheduleForDay(currentConfig, currentTime.DayOfWeek, out todayStart, out todayEnd);
+            bool todayEnabled;
+            GetScheduleForDay(currentConfig, currentTime.DayOfWeek, out todayStart, out todayEnd, out todayEnabled);
             TimeSpan todayStartTime = ParseTime(todayStart);
             TimeSpan todayEndTime = ParseTime(todayEnd);
             TimeSpan now = currentTime.TimeOfDay;
-            if (todayStartTime < todayEndTime && now >= todayStartTime && now < todayEndTime) return true;
-            if (todayStartTime > todayEndTime && now >= todayStartTime) return true;
+            if (todayEnabled && todayStartTime < todayEndTime && now >= todayStartTime && now < todayEndTime) return true;
+            if (todayEnabled && todayStartTime > todayEndTime && now >= todayStartTime) return true;
 
             string yesterdayStart;
             string yesterdayEnd;
-            GetScheduleForDay(currentConfig, currentTime.AddDays(-1).DayOfWeek, out yesterdayStart, out yesterdayEnd);
+            bool yesterdayEnabled;
+            GetScheduleForDay(currentConfig, currentTime.AddDays(-1).DayOfWeek, out yesterdayStart, out yesterdayEnd, out yesterdayEnabled);
             TimeSpan previousStartTime = ParseTime(yesterdayStart);
             TimeSpan previousEndTime = ParseTime(yesterdayEnd);
-            return previousStartTime > previousEndTime && now < previousEndTime;
+            return yesterdayEnabled && previousStartTime > previousEndTime && now < previousEndTime;
         }
 
         private static bool IsWithinTime(TimeSpan now, string startValue, string endValue)
@@ -900,7 +1001,7 @@ namespace WindowsAppBlocker
             return DateTime.ParseExact(value, "HH:mm", CultureInfo.InvariantCulture).TimeOfDay;
         }
 
-        private static void GetScheduleForDay(AppBlockerConfig currentConfig, DayOfWeek day, out string start, out string end)
+        private static void GetScheduleForDay(AppBlockerConfig currentConfig, DayOfWeek day, out string start, out string end, out bool enabled)
         {
             if (currentConfig.ScheduleMode == IndividualDays)
             {
@@ -916,11 +1017,13 @@ namespace WindowsAppBlocker
                     default: index = 6; break;
                 }
                 GetIndividualSchedule(currentConfig, index, out start, out end);
+                enabled = GetIndividualEnabled(currentConfig, index);
                 return;
             }
             bool weekend = day == DayOfWeek.Saturday || day == DayOfWeek.Sunday;
             start = weekend ? currentConfig.WeekendBlockStart : currentConfig.WeekdayBlockStart;
             end = weekend ? currentConfig.WeekendBlockEnd : currentConfig.WeekdayBlockEnd;
+            enabled = weekend ? IsScheduleEnabled(currentConfig.WeekendEnabled) : IsScheduleEnabled(currentConfig.WeekdayEnabled);
         }
 
         private static dynamic GetTask()
